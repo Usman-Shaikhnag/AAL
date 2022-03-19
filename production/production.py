@@ -702,17 +702,11 @@ class Production(ShipmentAssignMixin, Workflow, ModelSQL, ModelView):
     @ModelView.button
     @Workflow.transition('waiting')
     def wait(cls, productions):
-        try:
-            
-            if productions[0].inputs[0].quantity < productions[0].outputs[0].quantity:
-                raise UserError("Output cannot be greater than input")
-            else:
-                pool = Pool()
-                Move = pool.get('stock.move')
-                Move.draft([m for p in productions
-                        for m in p.inputs + p.outputs])
-        except:
-            raise UserError("Inputs and Outputs fields must not be empty")
+        pool = Pool()
+        Move = pool.get('stock.move')
+        Move.draft([m for p in productions
+                for m in p.inputs + p.outputs])
+        
 
     @classmethod
     @Workflow.transition('assigned')
@@ -740,14 +734,26 @@ class Production(ShipmentAssignMixin, Workflow, ModelSQL, ModelView):
     @Workflow.transition('done')
     @set_employee('done_by')
     def done(cls, productions):
-        pool = Pool()
-        Move = pool.get('stock.move')
-        Date = pool.get('ir.date')
-        cls.set_cost(productions)
-        Move.do([m for p in productions for m in p.outputs])
-        cls.write([p for p in productions if not p.effective_date], {
-                'effective_date': Date.today(),
-                })
+        try:
+            if len(productions[0].inputs) > 0 and len(productions[0].outputs) > 0:
+                if productions[0].inputs[0].quantity < productions[0].outputs[0].quantity:
+                    raise UserError("Output cannot be greater than input")
+                else:
+                    pool = Pool()
+                    Move = pool.get('stock.move')
+                    Date = pool.get('ir.date')
+                    cls.set_cost(productions)
+                    Move.do([m for p in productions for m in p.outputs])
+                    cls.write([p for p in productions if not p.effective_date], {
+                            'effective_date': Date.today(),
+                            })
+        except:
+            if len(productions[0].inputs) > 0 and len(productions[0].outputs) > 0:
+                if productions[0].inputs[0].quantity < productions[0].outputs[0].quantity:
+                    raise UserError("Output cannot be greater than input")
+            else:
+                raise UserError("Inputs and Outputs fields must not be empty")
+        
 
     @classmethod
     @ModelView.button_action('production.wizard_production_assign')
